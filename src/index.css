@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'Inter', 'Be Vietnam Pro', sans-serif;
+    @apply bg-slate-50 text-slate-800;
+  }
+}
