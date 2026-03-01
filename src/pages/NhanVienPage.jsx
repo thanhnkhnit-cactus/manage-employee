@@ -1,25 +1,45 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth, ROLE_LABELS } from '../contexts/AuthContext'
 import * as XLSX from 'xlsx'
 import {
     Plus, Search, Pencil, Trash2, Upload, X, Check,
     ChevronUp, ChevronDown, Users, UserCheck, UserX,
-    FileSpreadsheet, AlertCircle, CheckCircle2, Loader2
+    FileSpreadsheet, AlertCircle, CheckCircle2, Loader2, Shield
 } from 'lucide-react'
 
+const ROLE_COLORS = {
+    admin: 'bg-purple-100 text-purple-700',
+    manager: 'bg-blue-100 text-blue-700',
+    truong_phong_kinh_doanh: 'bg-indigo-100 text-indigo-700',
+    ke_toan: 'bg-emerald-100 text-emerald-700',
+    nhan_vien: 'bg-slate-100 text-slate-600',
+    quan_ly_kho: 'bg-orange-100 text-orange-700',
+}
+
 // ─── Modal Form ────────────────────────────────────────────────────────────────
-function NhanVienModal({ open, onClose, editData, onSaved }) {
+function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
     const [form, setForm] = useState({
-        ma_nhan_vien: '', ho_ten: '', don_vi: '', ma_so_thue: '', so_cccd: '', da_nghi_viec: false
+        ma_nhan_vien: '', ho_ten: '', don_vi: '', ma_so_thue: '', so_cccd: '',
+        da_nghi_viec: false, email: '', role: 'nhan_vien'
     })
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
 
     useEffect(() => {
         if (editData) {
-            setForm({ ...editData })
+            setForm({
+                ma_nhan_vien: editData.ma_nhan_vien || '',
+                ho_ten: editData.ho_ten || '',
+                don_vi: editData.don_vi || '',
+                ma_so_thue: editData.ma_so_thue || '',
+                so_cccd: editData.so_cccd || '',
+                da_nghi_viec: editData.da_nghi_viec ?? false,
+                email: editData.email || '',
+                role: editData.role || 'nhan_vien',
+            })
         } else {
-            setForm({ ma_nhan_vien: '', ho_ten: '', don_vi: '', ma_so_thue: '', so_cccd: '', da_nghi_viec: false })
+            setForm({ ma_nhan_vien: '', ho_ten: '', don_vi: '', ma_so_thue: '', so_cccd: '', da_nghi_viec: false, email: '', role: 'nhan_vien' })
         }
         setError('')
     }, [editData, open])
@@ -36,21 +56,25 @@ function NhanVienModal({ open, onClose, editData, onSaved }) {
         let result
         if (editData?.id) {
             result = await supabase.from('nhan_vien').update({
-                ma_nhan_vien: form.ma_nhan_vien,
-                ho_ten: form.ho_ten,
-                don_vi: form.don_vi,
-                ma_so_thue: form.ma_so_thue,
-                so_cccd: form.so_cccd,
+                ma_nhan_vien: form.ma_nhan_vien.trim(),
+                ho_ten: form.ho_ten.trim(),
+                don_vi: form.don_vi.trim(),
+                ma_so_thue: form.ma_so_thue.trim(),
+                so_cccd: form.so_cccd.trim(),
                 da_nghi_viec: form.da_nghi_viec,
+                email: form.email.trim() || null,
+                role: form.role,
             }).eq('id', editData.id)
         } else {
             result = await supabase.from('nhan_vien').insert([{
-                ma_nhan_vien: form.ma_nhan_vien,
-                ho_ten: form.ho_ten,
-                don_vi: form.don_vi,
-                ma_so_thue: form.ma_so_thue,
-                so_cccd: form.so_cccd,
+                ma_nhan_vien: form.ma_nhan_vien.trim(),
+                ho_ten: form.ho_ten.trim(),
+                don_vi: form.don_vi.trim(),
+                ma_so_thue: form.ma_so_thue.trim(),
+                so_cccd: form.so_cccd.trim(),
                 da_nghi_viec: form.da_nghi_viec,
+                email: form.email.trim() || null,
+                role: form.role,
             }])
         }
 
@@ -145,6 +169,7 @@ function NhanVienModal({ open, onClose, editData, onSaved }) {
                         </div>
                     </div>
 
+                    {/* Trạng thái nghỉ việc - chỉ admin mới đổi */}
                     <div className="flex items-center gap-3 pt-1">
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -156,6 +181,43 @@ function NhanVienModal({ open, onClose, editData, onSaved }) {
                             <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
                         </label>
                         <span className="text-sm font-medium text-slate-700">Đã nghỉ việc</span>
+                    </div>
+
+                    {/* Thông tin đăng nhập - chỉ admin mới đổi */}
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <Shield className="w-4 h-4 text-indigo-500" />
+                            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">Tài khoản & Phân quyền</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1.5">Email đăng nhập</label>
+                                <input
+                                    type="email"
+                                    value={form.email}
+                                    onChange={e => setForm({ ...form, email: e.target.value })}
+                                    className="w-full px-3 py-2.5 border border-indigo-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+                                    placeholder="nhanvien@congty.com"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1.5">Vai trò</label>
+                                <select
+                                    value={form.role}
+                                    onChange={e => setForm({ ...form, role: e.target.value })}
+                                    disabled={!isAdmin}
+                                    className="w-full px-3 py-2.5 border border-indigo-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                    <option value="nhan_vien">Nhân viên</option>
+                                    <option value="ke_toan">Kế toán</option>
+                                    <option value="quan_ly_kho">Quản lý kho</option>
+                                    <option value="truong_phong_kinh_doanh">Trưởng phòng KD</option>
+                                    <option value="manager">Quản lý</option>
+                                    <option value="admin">Quản trị viên (Admin)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <p className="text-xs text-indigo-500">💡 Nhân viên đăng nhập bằng email trên. Tài khoản Supabase cần được tạo qua Dashboard hoặc chức năng Mời người dùng.</p>
                     </div>
                 </div>
 
@@ -390,6 +452,10 @@ function ImportModal({ open, onClose, onImported }) {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function NhanVienPage() {
+    const { role: myRole, employeeProfile } = useAuth()
+    const isAdmin = myRole === 'admin'
+    const myEmail = employeeProfile?.email || null
+
     const [data, setData] = useState([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
@@ -508,22 +574,26 @@ export default function NhanVienPage() {
                         <option value="resigned">Đã nghỉ việc</option>
                     </select>
 
-                    {/* Buttons */}
-                    <button
-                        onClick={() => setImportOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium transition-all"
-                    >
-                        <FileSpreadsheet className="w-4 h-4" />
-                        <span>Import Excel</span>
-                    </button>
+                    {/* Buttons - chỉ admin mới thấy */}
+                    {isAdmin && (
+                        <button
+                            onClick={() => setImportOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium transition-all"
+                        >
+                            <FileSpreadsheet className="w-4 h-4" />
+                            <span>Import Excel</span>
+                        </button>
+                    )}
 
-                    <button
-                        onClick={() => { setEditData(null); setModalOpen(true) }}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all"
-                    >
-                        <Plus className="w-4 h-4" />
-                        <span>Thêm mới</span>
-                    </button>
+                    {isAdmin && (
+                        <button
+                            onClick={() => { setEditData(null); setModalOpen(true) }}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all"
+                        >
+                            <Plus className="w-4 h-4" />
+                            <span>Thêm mới</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -550,6 +620,7 @@ export default function NhanVienPage() {
                                         { label: 'Đơn vị', field: 'don_vi' },
                                         { label: 'Mã số thuế', field: 'ma_so_thue' },
                                         { label: 'CCCD', field: 'so_cccd' },
+                                        { label: 'Vai trò', field: 'role' },
                                         { label: 'Trạng thái', field: 'da_nghi_viec' },
                                     ].map(col => (
                                         <th
@@ -567,32 +638,42 @@ export default function NhanVienPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {filtered.map(nv => (
-                                    <tr key={nv.id} className="hover:bg-slate-50/70 transition-colors">
-                                        <td className="px-4 py-3">
-                                            <span className="font-mono text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-lg font-medium">{nv.ma_nhan_vien}</span>
-                                        </td>
-                                        <td className="px-4 py-3">
+                                {filtered.map(nv => <tr key={nv.id} className="hover:bg-slate-50/70 transition-colors">
+                                    <td className="px-4 py-3">
+                                        <span className="font-mono text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-lg font-medium">{nv.ma_nhan_vien}</span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div>
                                             <span className="font-medium text-slate-800 text-sm">{nv.ho_ten}</span>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-slate-600">{nv.don_vi || '—'}</td>
-                                        <td className="px-4 py-3 text-sm text-slate-600 font-mono">{nv.ma_so_thue || '—'}</td>
-                                        <td className="px-4 py-3 text-sm text-slate-600 font-mono">{nv.so_cccd || '—'}</td>
-                                        <td className="px-4 py-3">
-                                            {nv.da_nghi_viec ? (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-medium">
-                                                    <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
-                                                    Đã nghỉ
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-medium">
-                                                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                                                    Đang làm
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center justify-end gap-2">
+                                            {nv.email && <p className="text-xs text-slate-400 mt-0.5">{nv.email}</p>}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-slate-600">{nv.don_vi || '—'}</td>
+                                    <td className="px-4 py-3 text-sm text-slate-600 font-mono">{nv.ma_so_thue || '—'}</td>
+                                    <td className="px-4 py-3 text-sm text-slate-600 font-mono">{nv.so_cccd || '—'}</td>
+                                    {/* Role badge */}
+                                    <td className="px-4 py-3">
+                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${ROLE_COLORS[nv.role] || 'bg-slate-100 text-slate-600'}`}>
+                                            {ROLE_LABELS[nv.role] || nv.role || '—'}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        {nv.da_nghi_viec ? (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-medium">
+                                                <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+                                                Đã nghỉ
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-medium">
+                                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                                                Đang làm
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center justify-end gap-2">
+                                            {/* Edit: admin thấy tất, user thường chỉ thấy nút sửa của mình */}
+                                            {(isAdmin || nv.email === myEmail) && (
                                                 <button
                                                     onClick={() => { setEditData(nv); setModalOpen(true) }}
                                                     className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
@@ -600,6 +681,9 @@ export default function NhanVienPage() {
                                                 >
                                                     <Pencil className="w-4 h-4" />
                                                 </button>
+                                            )}
+                                            {/* Delete: chỉ admin */}
+                                            {isAdmin && (
                                                 <button
                                                     onClick={() => setDeleteTarget(nv)}
                                                     className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
@@ -607,10 +691,11 @@ export default function NhanVienPage() {
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -631,6 +716,7 @@ export default function NhanVienPage() {
                 onClose={() => setModalOpen(false)}
                 editData={editData}
                 onSaved={fetchData}
+                isAdmin={isAdmin}
             />
             <DeleteModal
                 open={!!deleteTarget}

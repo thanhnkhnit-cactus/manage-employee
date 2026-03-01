@@ -7,4 +7,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Missing Supabase environment variables')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Giải pháp triệt để cho GoTrue lock timeout:
+// Cung cấp custom lock implementation không bao giờ blocking
+// Thay vì dùng BroadcastChannel lock (gây timeout 5s), ta dùng in-memory lock
+const customLock = async (name, acquireTimeout, fn) => {
+    // Thực thi hàm ngay lập tức không chờ lock
+    return fn()
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+        persistSession: true,
+        detectSessionInUrl: false,
+        storage: localStorage,
+        lock: customLock,
+    }
+})

@@ -2,6 +2,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage'
 import NhanVienPage from './pages/NhanVienPage'
+import SanPhamPage from './pages/SanPhamPage'
+import KhoHangPage from './pages/KhoHangPage'
+import HoaDonPage from './pages/HoaDonPage'
+import DonNhapHangPage from './pages/DonNhapHangPage'
 import Layout from './components/Layout'
 import { Loader2 } from 'lucide-react'
 
@@ -37,16 +41,11 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <NhanVienPage />
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/" element={<ProtectedRoute><Layout><NhanVienPage /></Layout></ProtectedRoute>} />
+      <Route path="/san-pham" element={<ProtectedRoute><Layout><SanPhamPage /></Layout></ProtectedRoute>} />
+      <Route path="/kho-hang" element={<ProtectedRoute><Layout><KhoHangPage /></Layout></ProtectedRoute>} />
+      <Route path="/hoa-don" element={<ProtectedRoute><Layout><HoaDonPage /></Layout></ProtectedRoute>} />
+      <Route path="/nhap-hang" element={<ProtectedRoute><Layout><DonNhapHangPage /></Layout></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
