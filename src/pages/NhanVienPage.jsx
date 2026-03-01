@@ -26,6 +26,7 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
 
+    // Auto-generate mã nhân viên when opening add-new form
     useEffect(() => {
         if (editData) {
             setForm({
@@ -39,10 +40,20 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
                 password: '',
                 role: editData.role || 'nhan_vien',
             })
-        } else {
-            setForm({ ma_nhan_vien: '', ho_ten: '', don_vi: '', ma_so_thue: '', so_cccd: '', da_nghi_viec: false, email: '', password: '', role: 'nhan_vien' })
+            setError('')
+        } else if (open) {
+            // Generate next mã NV
+            supabase.from('nhan_vien').select('ma_nhan_vien').then(({ data: rows }) => {
+                const nums = (rows || []).map(r => {
+                    const m = r.ma_nhan_vien?.match(/^NV(\d+)$/i)
+                    return m ? parseInt(m[1], 10) : 0
+                })
+                const next = (nums.length ? Math.max(...nums) : 0) + 1
+                const nextCode = 'NV' + String(next).padStart(3, '0')
+                setForm({ ma_nhan_vien: nextCode, ho_ten: '', don_vi: '', ma_so_thue: '', so_cccd: '', da_nghi_viec: false, email: '', password: '', role: 'nhan_vien' })
+            })
+            setError('')
         }
-        setError('')
     }, [editData, open])
 
     if (!open) return null
@@ -51,6 +62,12 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
         if (!form.ma_nhan_vien.trim()) return setError('Vui lòng nhập mã nhân viên')
         if (!form.ho_ten.trim()) return setError('Vui lòng nhập họ tên')
         if (!editData && form.email && !form.password) return setError('Vui lòng nhập mật khẩu cho tài khoản')
+
+        // Kiểm tra tên không trùng
+        let nameQuery = supabase.from('nhan_vien').select('id').ilike('ho_ten', form.ho_ten.trim())
+        if (editData?.id) nameQuery = nameQuery.neq('id', editData.id)
+        const { data: dupName } = await nameQuery.maybeSingle()
+        if (dupName) return setError(`Tên "${form.ho_ten.trim()}" đã tồn tại. Vui lòng nhập tên khác.`)
 
         setSaving(true)
         setError('')
