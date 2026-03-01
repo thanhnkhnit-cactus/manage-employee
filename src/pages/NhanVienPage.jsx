@@ -21,7 +21,7 @@ const ROLE_COLORS = {
 function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
     const [form, setForm] = useState({
         ma_nhan_vien: '', ho_ten: '', don_vi: '', ma_so_thue: '', so_cccd: '',
-        da_nghi_viec: false, email: '', role: 'nhan_vien'
+        da_nghi_viec: false, email: '', password: '', role: 'nhan_vien'
     })
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
@@ -36,10 +36,11 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
                 so_cccd: editData.so_cccd || '',
                 da_nghi_viec: editData.da_nghi_viec ?? false,
                 email: editData.email || '',
+                password: '',
                 role: editData.role || 'nhan_vien',
             })
         } else {
-            setForm({ ma_nhan_vien: '', ho_ten: '', don_vi: '', ma_so_thue: '', so_cccd: '', da_nghi_viec: false, email: '', role: 'nhan_vien' })
+            setForm({ ma_nhan_vien: '', ho_ten: '', don_vi: '', ma_so_thue: '', so_cccd: '', da_nghi_viec: false, email: '', password: '', role: 'nhan_vien' })
         }
         setError('')
     }, [editData, open])
@@ -49,12 +50,14 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
     const handleSave = async () => {
         if (!form.ma_nhan_vien.trim()) return setError('Vui lòng nhập mã nhân viên')
         if (!form.ho_ten.trim()) return setError('Vui lòng nhập họ tên')
+        if (!editData && form.email && !form.password) return setError('Vui lòng nhập mật khẩu cho tài khoản')
 
         setSaving(true)
         setError('')
 
         let result
         if (editData?.id) {
+            // Edit: chỉ cập nhật bảng nhan_vien, không đổi password
             result = await supabase.from('nhan_vien').update({
                 ma_nhan_vien: form.ma_nhan_vien.trim(),
                 ho_ten: form.ho_ten.trim(),
@@ -66,6 +69,23 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
                 role: form.role,
             }).eq('id', editData.id)
         } else {
+            // Thêm mới: tạo auth account nếu có email + password
+            let authUserId = null
+            if (form.email.trim() && form.password) {
+                const { data: authData, error: authErr } = await supabase.auth.signUp({
+                    email: form.email.trim(),
+                    password: form.password,
+                    options: {
+                        data: { ho_ten: form.ho_ten.trim(), role: form.role }
+                    }
+                })
+                if (authErr) {
+                    setError('Tạo tài khoản thất bại: ' + authErr.message)
+                    setSaving(false)
+                    return
+                }
+                authUserId = authData?.user?.id || null
+            }
             result = await supabase.from('nhan_vien').insert([{
                 ma_nhan_vien: form.ma_nhan_vien.trim(),
                 ho_ten: form.ho_ten.trim(),
@@ -75,6 +95,7 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
                 da_nghi_viec: form.da_nghi_viec,
                 email: form.email.trim() || null,
                 role: form.role,
+                ...(authUserId ? { user_id: authUserId } : {}),
             }])
         }
 
@@ -217,7 +238,23 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
                                 </select>
                             </div>
                         </div>
-                        <p className="text-xs text-indigo-500">💡 Nhân viên đăng nhập bằng email trên. Tài khoản Supabase cần được tạo qua Dashboard hoặc chức năng Mời người dùng.</p>
+                        {/* Mật khẩu – chỉ hiện khi thêm mới */}
+                        {!editData && (
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                                    Mật khẩu {form.email && <span className="text-red-500">*</span>}
+                                </label>
+                                <input
+                                    type="password"
+                                    value={form.password}
+                                    onChange={e => setForm({ ...form, password: e.target.value })}
+                                    className="w-full px-3 py-2.5 border border-indigo-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+                                    placeholder="Tối thiểu 6 ký tự"
+                                    autoComplete="new-password"
+                                />
+                            </div>
+                        )}
+                        <p className="text-xs text-indigo-500">💡 Nhập email + mật khẩu để tạo tài khoản đăng nhập cho nhân viên. Bỏ trống nếu chưa cần.</p>
                     </div>
                 </div>
 
@@ -453,7 +490,7 @@ function ImportModal({ open, onClose, onImported }) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function NhanVienPage() {
     const { role: myRole, employeeProfile } = useAuth()
-    const isAdmin = myRole === 'admin'
+    const isAdmin = myRole === 'admin' || myRole === null   // null = Supabase admin chưa liên kết nhan_vien
     const myEmail = employeeProfile?.email || null
 
     const [data, setData] = useState([])
