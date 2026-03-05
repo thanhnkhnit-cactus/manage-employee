@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth, ROLE_LABELS } from '../contexts/AuthContext'
-import { Building2, LogOut, Users, Package, FileText, Shield, Warehouse, Boxes, ChevronLeft, ChevronRight, Menu, X } from 'lucide-react'
+import { Building2, LogOut, Users, Package, FileText, Shield, Warehouse, Boxes, ChevronLeft, ChevronRight, Menu, X, ShieldCheck, Truck, Navigation, MapPin, ClipboardList } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const ROLE_BADGE_COLORS = {
@@ -12,24 +12,28 @@ const ROLE_BADGE_COLORS = {
     quan_ly_kho: 'bg-orange-100 text-orange-700',
 }
 
+// Định nghĩa tất cả menu items với menu_key tương ứng
+const ALL_NAV_ITEMS = [
+    { to: '/', label: 'Nhân viên', icon: Users, end: true, menuKey: 'nhan-vien' },
+    { to: '/san-pham', label: 'Sản phẩm', icon: Package, end: false, menuKey: 'san-pham' },
+    { to: '/kho-hang', label: 'Kho hàng', icon: Boxes, end: false, menuKey: 'kho-hang' },
+    { to: '/hoa-don', label: 'Hóa đơn', icon: FileText, end: false, menuKey: 'hoa-don' },
+    { to: '/nhap-hang', label: 'Nhập hàng', icon: Warehouse, end: false, menuKey: 'nhap-hang' },
+    { to: '/vai-tro', label: 'Vai trò', icon: Shield, end: false, menuKey: 'vai-tro' },
+    { to: '/phan-quyen', label: 'Phân quyền', icon: ShieldCheck, end: false, menuKey: 'phan-quyen' },
+    { to: '/doi-xe', label: 'Đội xe (TMS)', icon: Truck, end: false, menuKey: 'doi-xe' },
+    { to: '/len-don', label: 'Lên đơn báo giá', icon: Navigation, end: false, menuKey: 'len-don' },
+    { to: '/don-van-chuyen', label: 'Đơn vận chuyển', icon: ClipboardList, end: false, menuKey: 'don-van-chuyen' },
+    { to: '/chuyen-xe', label: 'Chuyến xe', icon: MapPin, end: false, menuKey: 'chuyen-xe' },
+]
+
 export default function Layout({ children }) {
-    const { user, signOut, employeeProfile, role } = useAuth()
+    const { user, signOut, employeeProfile, role, hasMenuAccess } = useAuth()
     const [collapsed, setCollapsed] = useState(false)
     const [mobileOpen, setMobileOpen] = useState(false)
 
-    const allNavItems = [
-        { to: '/', label: 'Nhân viên', icon: Users, end: true, roles: ['admin', 'manager', 'ke_toan', 'truong_phong_kinh_doanh'] },
-        { to: '/san-pham', label: 'Sản phẩm', icon: Package, roles: null },
-        { to: '/kho-hang', label: 'Kho hàng', icon: Boxes, roles: null },
-        { to: '/hoa-don', label: 'Hóa đơn', icon: FileText, roles: null },
-        { to: '/nhap-hang', label: 'Nhập hàng', icon: Warehouse, roles: ['admin', 'manager', 'quan_ly_kho'] },
-    ]
-
-    const navItems = allNavItems.filter(item => {
-        if (!item.roles) return true
-        if (!role) return true
-        return item.roles.includes(role)
-    })
+    // Lọc menu dựa trên quyền từ DB
+    const navItems = ALL_NAV_ITEMS.filter(item => hasMenuAccess(item.menuKey))
 
     const displayName = employeeProfile?.ho_ten || user?.email || ''
     const roleLabelText = role ? (ROLE_LABELS[role] || role) : 'Quản trị viên'
@@ -53,7 +57,7 @@ export default function Layout({ children }) {
 
             {/* Nav Items */}
             <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-                {navItems.map(({ to, label, icon: Icon, end }) => (
+                {navItems.map(({ to, label, icon: Icon, end, menuKey }) => (
                     <NavLink
                         key={to}
                         to={to}
@@ -65,16 +69,20 @@ export default function Layout({ children }) {
                                 ? 'bg-blue-50 text-blue-700 shadow-sm'
                                 : 'text-slate-600 hover:text-slate-800 hover:bg-slate-100'
                             }
-                            ${collapsed ? 'justify-center' : ''}`
+                            ${collapsed ? 'justify-center' : ''}
+                            ${menuKey === 'phan-quyen' ? 'border-t border-slate-100 mt-1 pt-1' : ''}`
                         }
                         title={collapsed ? label : undefined}
                     >
                         {({ isActive }) => (
                             <>
-                                <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                                <Icon className={`w-5 h-5 flex-shrink-0 ${menuKey === 'phan-quyen'
+                                    ? (isActive ? 'text-purple-600' : 'text-purple-400 group-hover:text-purple-600')
+                                    : (isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600')
+                                    }`} />
                                 {!collapsed && <span>{label}</span>}
                                 {!collapsed && isActive && (
-                                    <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                    <span className={`ml-auto w-1.5 h-1.5 rounded-full ${menuKey === 'phan-quyen' ? 'bg-purple-500' : 'bg-blue-500'}`} />
                                 )}
                             </>
                         )}

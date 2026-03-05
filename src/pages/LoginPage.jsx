@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 import { LogIn, Eye, EyeOff, Building2 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -15,10 +16,27 @@ export default function LoginPage() {
         setError('')
         setLoading(true)
 
-        const { error } = await signIn(email, password)
-        if (error) {
+        const { data: authData, error: authError } = await signIn(email, password)
+        if (authError) {
             setError('Email hoặc mật khẩu không đúng. Vui lòng thử lại.')
+            setLoading(false)
+            return
         }
+
+        // Kiểm tra nhân viên đã nghỉ việc
+        const { data: profile } = await supabase
+            .from('nhan_vien')
+            .select('da_nghi_viec, ho_ten')
+            .eq('email', email.trim().toLowerCase())
+            .maybeSingle()
+
+        if (profile?.da_nghi_viec === true) {
+            await supabase.auth.signOut()
+            setError(`Tài khoản "${profile.ho_ten || email}" đã bị vô hiệu hóa do nghỉ việc. Vui lòng liên hệ quản trị viên.`)
+            setLoading(false)
+            return
+        }
+
         setLoading(false)
     }
 

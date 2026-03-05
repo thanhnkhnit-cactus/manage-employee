@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import {
-    Plus, Search, Pencil, Ban, X, Check, Lock, Eye,
-    ChevronUp, ChevronDown, FileText, AlertCircle, Loader2,
-    TrendingUp, CheckCircle2, XCircle
+    Plus, Search, Pencil, Ban, X, Check, Lock, Unlock, Eye,
+    ChevronUp, ChevronDown, FileText, AlertCircle, Loader2, Trash2,
+    TrendingUp, CheckCircle2, XCircle, ShoppingCart
 } from 'lucide-react'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ const ACTIVE_STATUSES = ['khoi_tao', 'da_xuat_hang', 'dang_giao_hang']
 const SHIPPED_STATUSES = ['da_xuat_hang', 'dang_giao_hang']
 
 // ─── Password Modal ───────────────────────────────────────────────────────────
-function PasswordModal({ open, onClose, onSuccess }) {
+function PasswordModal({ open, onClose, onSuccess, userPassword }) {
     const [pwd, setPwd] = useState('')
     const [error, setError] = useState('')
 
@@ -36,7 +36,9 @@ function PasswordModal({ open, onClose, onSuccess }) {
     if (!open) return null
 
     const handleCheck = () => {
-        if (pwd === (import.meta.env.VITE_PROFIT_PASSWORD || '123456')) {
+        // So sánh với mat_khau trong bảng nhan_vien, fallback về env variable
+        const correct = userPassword || (import.meta.env.VITE_PROFIT_PASSWORD || '123456')
+        if (pwd === correct) {
             onSuccess()
             onClose()
         } else {
@@ -187,8 +189,8 @@ function HoaDonModal({ open, onClose, editData, products, employees = [], onSave
                 const wasActive = ACTIVE_STATUSES.includes(oldStatus)
                 const nowCancelled = ['huy_don_hang', 'hoan_hang'].includes(form.trang_thai)
                 if (wasActive && nowCancelled && editData.san_pham_id) {
-                    const { data: sp } = await supabase.from('san_pham').select('so_luong').eq('id', editData.san_pham_id).single()
-                    if (sp) await supabase.from('san_pham').update({ so_luong: sp.so_luong + editData.so_luong }).eq('id', editData.san_pham_id)
+                    const { data: kh } = await supabase.from('kho_hang').select('id, so_luong').eq('san_pham_id', editData.san_pham_id).single()
+                    if (kh) await supabase.from('kho_hang').update({ so_luong: kh.so_luong + editData.so_luong, updated_at: new Date().toISOString() }).eq('id', kh.id)
                 }
             } else {
                 // ─ Tạo đơn hàng mới ──────────────────────────────────────
@@ -458,9 +460,9 @@ function DeleteModal({ open, onClose, hoaDon, onDeleted }) {
         try {
             // Hoàn kho nếu đơn vẫn đang active
             if (willRestoreStock && hoaDon.san_pham_id) {
-                const { data: sp } = await supabase.from('san_pham').select('so_luong').eq('id', hoaDon.san_pham_id).single()
-                if (sp) {
-                    await supabase.from('san_pham').update({ so_luong: sp.so_luong + hoaDon.so_luong }).eq('id', hoaDon.san_pham_id)
+                const { data: kh } = await supabase.from('kho_hang').select('id, so_luong').eq('san_pham_id', hoaDon.san_pham_id).single()
+                if (kh) {
+                    await supabase.from('kho_hang').update({ so_luong: kh.so_luong + hoaDon.so_luong, updated_at: new Date().toISOString() }).eq('id', kh.id)
                 }
             }
             const { error } = await supabase.from('hoa_don').delete().eq('id', hoaDon.id)
@@ -502,8 +504,9 @@ function DeleteModal({ open, onClose, hoaDon, onDeleted }) {
 
 // ─── Trang chính ──────────────────────────────────────────────────────────────
 export default function HoaDonPage() {
-    const { canSeeProfit, role } = useAuth()
+    const { canSeeProfit, role, employeeProfile } = useAuth()
     const canEdit = role !== 'nhan_vien'
+    const userPassword = employeeProfile?.mat_khau || null
     const [data, setData] = useState([])
     const [products, setProducts] = useState([])
     const [employees, setEmployees] = useState([])
@@ -670,17 +673,15 @@ export default function HoaDonPage() {
                         <option value="all">Tất cả trạng thái</option>
                         {Object.entries(TRANG_THAI).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                     </select>
-                    {/* Nút lợi nhuận - chỉ hiện với roles có quyền */}
-                    {canSeeProfit && (
-                        <button
-                            onClick={() => profitUnlocked ? setProfitUnlocked(false) : setPwdModalOpen(true)}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all border ${profitUnlocked ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                            title={profitUnlocked ? 'Ẩn lợi nhuận' : 'Xem lợi nhuận'}
-                        >
-                            {profitUnlocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                            <span className="hidden sm:inline">Lợi nhuận</span>
-                        </button>
-                    )}
+                    {/* Nút lợi nhuận - tất cả đều thấy, mật khẩu bảo vệ */}
+                    <button
+                        onClick={() => profitUnlocked ? setProfitUnlocked(false) : setPwdModalOpen(true)}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all border ${profitUnlocked ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                        title={profitUnlocked ? 'Ẩn lợi nhuận' : 'Xem lợi nhuận'}
+                    >
+                        {profitUnlocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                        <span className="hidden sm:inline">Lợi nhuận</span>
+                    </button>
                     <button onClick={() => { setEditData(null); setModalOpen(true) }}
                         className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all">
                         <Plus className="w-4 h-4" /> <span>Tạo đơn</span>
@@ -715,15 +716,17 @@ export default function HoaDonPage() {
                                             </div>
                                         </th>
                                     ))}
-                                    {/* Cột lợi nhuận - chỉ admin/manager/kế toán */}
-                                    {canSeeProfit && (
-                                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 whitespace-nowrap">
-                                            <div className="flex items-center gap-1">
-                                                {profitUnlocked ? <Unlock className="w-3 h-3 text-amber-500" /> : <Lock className="w-3 h-3 text-slate-400" />}
-                                                Lợi nhuận
-                                            </div>
-                                        </th>
-                                    )}
+                                    {/* Cột lợi nhuận - tất cả đều thấy */}
+                                    <th
+                                        onClick={() => profitUnlocked ? setProfitUnlocked(false) : setPwdModalOpen(true)}
+                                        className="px-4 py-3 text-left text-xs font-semibold text-slate-600 whitespace-nowrap cursor-pointer hover:text-amber-600 select-none"
+                                        title={profitUnlocked ? 'Ẩn lợi nhuận' : 'Click để xem lợi nhuận'}
+                                    >
+                                        <div className="flex items-center gap-1">
+                                            {profitUnlocked ? <Unlock className="w-3 h-3 text-amber-500" /> : <Lock className="w-3 h-3 text-slate-400" />}
+                                            Lợi nhuận
+                                        </div>
+                                    </th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">Thao tác</th>
                                 </tr>
                             </thead>
@@ -750,7 +753,7 @@ export default function HoaDonPage() {
                                             <td className="px-4 py-3 whitespace-nowrap text-slate-600">{formatVND(hd.phi_quang_cao)}</td>
                                             {/* Trạng thái — dropdown đổi inline */}
                                             <td className="px-4 py-3 whitespace-nowrap">
-                                                {canEdit ? (
+                                                {canEdit && hd.trang_thai !== 'giao_thanh_cong' ? (
                                                     <select
                                                         value={hd.trang_thai}
                                                         onChange={e => handleQuickStatus(hd, e.target.value)}
@@ -767,21 +770,20 @@ export default function HoaDonPage() {
                                             <td className="px-4 py-3 text-slate-500 max-w-[160px]">
                                                 <span className="text-xs line-clamp-1">{hd.ly_do_huy || '—'}</span>
                                             </td>
-                                            {/* Lợi nhuận */}
-                                            {canSeeProfit && (
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    {profitUnlocked ? (
-                                                        <span className={`text-sm font-semibold ${profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                                            {formatVND(profit)}
-                                                        </span>
-                                                    ) : (
-                                                        <button onClick={() => setPwdModalOpen(true)}
-                                                            className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-600 transition-colors">
-                                                            <Lock className="w-3.5 h-3.5" /> ••••••
-                                                        </button>
-                                                    )}
-                                                </td>
-                                            )}
+                                            {/* Lợi nhuận - tất cả đều thấy, nhập mật khẩu để mở */}
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                {profitUnlocked ? (
+                                                    <span className={`text-sm font-semibold ${profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                        {formatVND(profit)}
+                                                    </span>
+                                                ) : (
+                                                    <button onClick={() => setPwdModalOpen(true)}
+                                                        className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-600 transition-colors"
+                                                        title="Click để xem lợi nhuận">
+                                                        <Lock className="w-3.5 h-3.5" /> ••••••
+                                                    </button>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-end gap-2">
                                                     {/* Xem chi tiết - tất cả role đều xem được */}
@@ -821,7 +823,7 @@ export default function HoaDonPage() {
             </div>
 
             {/* Modals */}
-            <PasswordModal open={pwdModalOpen} onClose={() => setPwdModalOpen(false)} onSuccess={() => setProfitUnlocked(true)} />
+            <PasswordModal open={pwdModalOpen} onClose={() => setPwdModalOpen(false)} onSuccess={() => setProfitUnlocked(true)} userPassword={userPassword} />
             <HoaDonModal open={modalOpen} onClose={() => setModalOpen(false)} editData={editData} products={products} employees={employees} onSaved={fetchData} />
             <DeleteModal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} hoaDon={deleteTarget} onDeleted={fetchData} />
             {/* Detail Modal */}

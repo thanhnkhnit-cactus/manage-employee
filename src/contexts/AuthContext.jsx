@@ -13,32 +13,57 @@ export const ROLE_LABELS = {
     quan_ly_kho: 'Quản lý kho',
 }
 
-// Các role được xem hết dữ liệu (được coi là "cấp trên")
 export const PRIVILEGED_ROLES = ['admin', 'manager', 'ke_toan', 'truong_phong_kinh_doanh', 'quan_ly_kho']
 
 async function fetchEmployeeProfile(userEmail) {
     if (!userEmail) return null
     const { data } = await supabase
         .from('nhan_vien')
-        .select('id, ma_nhan_vien, ho_ten, role, email')
+        .select('id, ma_nhan_vien, ho_ten, role, email, mat_khau')
         .eq('email', userEmail)
         .maybeSingle()
     return data ?? null
 }
 
+async function fetchMenuPermissions(role) {
+    if (!role) return null  // null = no restriction (supabase admin)
+    const { data } = await supabase
+        .from('phan_quyen_menu')
+        .select('menu_key, co_quyen')
+        .eq('role', role)
+    if (!data) return {}
+    // Convert array → { [menu_key]: boolean }
+    return data.reduce((acc, row) => {
+        acc[row.menu_key] = row.co_quyen
+        return acc
+    }, {})
+}
+
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null)
     const [loading, setLoading] = useState(true)
-    const [employeeProfile, setEmployeeProfile] = useState(null) // { id, role, ho_ten, ... }
+    const [employeeProfile, setEmployeeProfile] = useState(null)
+    const [menuPermissions, setMenuPermissions] = useState(null) // null = all allowed
 
     const loadProfile = async (authUser) => {
-        if (!authUser) { setEmployeeProfile(null); return }
+        if (!authUser) {
+            setEmployeeProfile(null)
+            setMenuPermissions(null)
+            return
+        }
         const profile = await fetchEmployeeProfile(authUser.email)
         setEmployeeProfile(profile)
+        const perms = await fetchMenuPermissions(profile?.role ?? null)
+        setMenuPermissions(perms)
+    }
+
+    const refreshMenuPermissions = async () => {
+        if (!employeeProfile?.role) return
+        const perms = await fetchMenuPermissions(employeeProfile.role)
+        setMenuPermissions(perms)
     }
 
     useEffect(() => {
-        // Timeout guard: nếu getSession() bị block bởi GoTrue lock, vẫn set loading = false sau 4s
         const timeout = setTimeout(() => setLoading(false), 4000)
 
         supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -68,14 +93,20 @@ export function AuthProvider({ children }) {
 
     const signOut = async () => {
         setEmployeeProfile(null)
+        setMenuPermissions(null)
         const { error } = await supabase.auth.signOut()
         return { error }
     }
 
-    // Helpers derived from employeeProfile
+    // Helper: kiểm tra user có quyền xem menu_key không
+    const hasMenuAccess = (menuKey) => {
+        if (!menuPermissions) return true   // null = Supabase admin, all access
+        return menuPermissions[menuKey] !== false
+    }
+
     const role = employeeProfile?.role ?? null
     const isAdmin = role === 'admin'
-    const isPrivileged = !role || PRIVILEGED_ROLES.includes(role) // null = Supabase admin not linked
+    const isPrivileged = !role || PRIVILEGED_ROLES.includes(role)
     const canSeeProfit = isPrivileged
     const canSeeGiaNhap = role !== 'nhan_vien' && role !== 'truong_phong_kinh_doanh'
     const canManageEmployees = role === 'admin' || role === 'manager'
@@ -86,6 +117,7 @@ export function AuthProvider({ children }) {
             employeeProfile, role,
             isAdmin, isPrivileged,
             canSeeProfit, canSeeGiaNhap, canManageEmployees,
+            menuPermissions, hasMenuAccess, refreshMenuPermissions,
         }}>
             {children}
         </AuthContext.Provider>

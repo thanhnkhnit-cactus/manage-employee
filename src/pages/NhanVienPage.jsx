@@ -17,8 +17,34 @@ const ROLE_COLORS = {
     quan_ly_kho: 'bg-orange-100 text-orange-700',
 }
 
-// ─── Modal Form ────────────────────────────────────────────────────────────────
-function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
+// Map role key → Role tiếng Anh (Admin / Manager / Supervisor / Teller)
+const ROLE_TO_EN = {
+    admin: 'Admin',
+    manager: 'Manager',
+    ke_toan: 'Supervisor',
+    truong_phong_kinh_doanh: 'Supervisor',
+    quan_ly_kho: 'Supervisor',
+    nhan_vien: 'Teller',
+}
+
+const ROLE_EN_COLORS = {
+    Admin: 'bg-purple-600 text-white',
+    Manager: 'bg-blue-600 text-white',
+    Supervisor: 'bg-indigo-500 text-white',
+    Teller: 'bg-slate-400 text-white',
+}
+
+// ─── Modal Form ──────────────────────────────────────────────────────────────────
+const ALL_ROLES = [
+    { value: 'nhan_vien', label: 'Nhân viên', level: 1 },
+    { value: 'ke_toan', label: 'Kế toán', level: 2 },
+    { value: 'quan_ly_kho', label: 'Quản lý kho', level: 2 },
+    { value: 'truong_phong_kinh_doanh', label: 'Trưởng phòng KD', level: 2 },
+    { value: 'manager', label: 'Quản lý', level: 3 },
+    { value: 'admin', label: 'Quản trị viên', level: 4 },
+]
+
+function NhanVienModal({ open, onClose, editData, onSaved, isAdmin, myLevel = 4 }) {
     const [form, setForm] = useState({
         ma_nhan_vien: '', ho_ten: '', don_vi: '', ma_so_thue: '', so_cccd: '',
         da_nghi_viec: false, email: '', password: '', role: 'nhan_vien'
@@ -86,22 +112,33 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
                 role: form.role,
             }).eq('id', editData.id)
         } else {
-            // Thêm mới: tạo auth account nếu có email + password
+            // Thêm mới: tạo auth account qua Edge Function (service role, không cần xác nhận email)
             let authUserId = null
             if (form.email.trim() && form.password) {
-                const { data: authData, error: authErr } = await supabase.auth.signUp({
-                    email: form.email.trim(),
-                    password: form.password,
-                    options: {
-                        data: { ho_ten: form.ho_ten.trim(), role: form.role }
+                const { data: { session } } = await supabase.auth.getSession()
+                const res = await fetch(
+                    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-auth-user`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session?.access_token}`,
+                            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                        },
+                        body: JSON.stringify({
+                            action: 'create',
+                            email: form.email.trim(),
+                            password: form.password,
+                        }),
                     }
-                })
-                if (authErr) {
-                    setError('Tạo tài khoản thất bại: ' + authErr.message)
+                )
+                const json = await res.json()
+                if (!res.ok || json.error) {
+                    setError('Tạo tài khoản thất bại: ' + (json.error || res.statusText))
                     setSaving(false)
                     return
                 }
-                authUserId = authData?.user?.id || null
+                authUserId = json.user_id || null
             }
             result = await supabase.from('nhan_vien').insert([{
                 ma_nhan_vien: form.ma_nhan_vien.trim(),
@@ -112,6 +149,7 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
                 da_nghi_viec: form.da_nghi_viec,
                 email: form.email.trim() || null,
                 role: form.role,
+                mat_khau: form.password || null,
                 ...(authUserId ? { user_id: authUserId } : {}),
             }])
         }
@@ -243,15 +281,15 @@ function NhanVienModal({ open, onClose, editData, onSaved, isAdmin }) {
                                 <select
                                     value={form.role}
                                     onChange={e => setForm({ ...form, role: e.target.value })}
-                                    disabled={!isAdmin}
+                                    disabled={myLevel < 2}  // Teller không đổi được role
                                     className="w-full px-3 py-2.5 border border-indigo-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
-                                    <option value="nhan_vien">Nhân viên</option>
-                                    <option value="ke_toan">Kế toán</option>
-                                    <option value="quan_ly_kho">Quản lý kho</option>
-                                    <option value="truong_phong_kinh_doanh">Trưởng phòng KD</option>
-                                    <option value="manager">Quản lý</option>
-                                    <option value="admin">Quản trị viên (Admin)</option>
+                                    {ALL_ROLES
+                                        .filter(r => r.level <= myLevel)  // Chỉ hiện role ≤ cấp bậc của mình
+                                        .map(r => (
+                                            <option key={r.value} value={r.value}>{r.label}</option>
+                                        ))
+                                    }
                                 </select>
                             </div>
                         </div>
@@ -507,8 +545,40 @@ function ImportModal({ open, onClose, onImported }) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function NhanVienPage() {
     const { role: myRole, employeeProfile } = useAuth()
-    const isAdmin = myRole === 'admin' || myRole === null   // null = Supabase admin chưa liên kết nhan_vien
+    const isAdmin = myRole === 'admin' || myRole === null
     const myEmail = employeeProfile?.email || null
+    const myId = employeeProfile?.id || null
+
+    // Mapping: role key → role EN bậc
+    // admin > manager > supervisor > teller
+    const ROLE_LEVEL = {
+        admin: 4,
+        manager: 3,
+        ke_toan: 2,
+        truong_phong_kinh_doanh: 2,
+        quan_ly_kho: 2,
+        nhan_vien: 1,
+    }
+
+    const myLevel = ROLE_LEVEL[myRole] ?? 4  // null/undefined = admin
+
+    // Trả về true nếu user hiện tại được phép XEM nhân viên này
+    const canViewRow = (nv) => {
+        if (myLevel >= 4) return true                   // Admin: thấy tất cả
+        const nvLevel = ROLE_LEVEL[nv.role] ?? 1
+        if (myLevel >= 3) return nvLevel <= 3           // Manager: thấy supervisor trở xuống + chính mình
+        if (myLevel >= 2) return nvLevel <= 1 || nv.id === myId  // Supervisor: thấy teller + chính mình
+        return nv.id === myId                            // Teller: chỉ thấy chính mình
+    }
+
+    // Trả về true nếu user hiện tại được phép SỬA nhân viên này
+    const canEditRow = (nv) => {
+        if (myLevel >= 4) return true                   // Admin: sửa tất cả
+        const nvLevel = ROLE_LEVEL[nv.role] ?? 1
+        if (myLevel >= 3) return nvLevel <= 3           // Manager: sửa supervisor + teller + chính mình
+        if (myLevel >= 2) return nvLevel <= 1 || nv.id === myId  // Supervisor: sửa teller + chính mình
+        return nv.id === myId                            // Teller: chỉ sửa chính mình
+    }
 
     const [data, setData] = useState([])
     const [loading, setLoading] = useState(true)
@@ -534,6 +604,7 @@ export default function NhanVienPage() {
     useEffect(() => { fetchData() }, [sortField, sortDir])
 
     const filtered = data.filter(nv => {
+        if (!canViewRow(nv)) return false                // RBAC: ẩn nhân viên không có quyền xem
         const q = search.toLowerCase()
         const matchSearch = !q || nv.ma_nhan_vien?.toLowerCase().includes(q) || nv.ho_ten?.toLowerCase().includes(q) || nv.don_vi?.toLowerCase().includes(q)
         const matchFilter = filterNghiViec === 'all' || (filterNghiViec === 'active' ? !nv.da_nghi_viec : nv.da_nghi_viec)
@@ -674,7 +745,6 @@ export default function NhanVienPage() {
                                         { label: 'Đơn vị', field: 'don_vi' },
                                         { label: 'Mã số thuế', field: 'ma_so_thue' },
                                         { label: 'CCCD', field: 'so_cccd' },
-                                        { label: 'Vai trò', field: 'role' },
                                         { label: 'Trạng thái', field: 'da_nghi_viec' },
                                     ].map(col => (
                                         <th
@@ -705,12 +775,7 @@ export default function NhanVienPage() {
                                     <td className="px-4 py-3 text-sm text-slate-600">{nv.don_vi || '—'}</td>
                                     <td className="px-4 py-3 text-sm text-slate-600 font-mono">{nv.ma_so_thue || '—'}</td>
                                     <td className="px-4 py-3 text-sm text-slate-600 font-mono">{nv.so_cccd || '—'}</td>
-                                    {/* Role badge */}
-                                    <td className="px-4 py-3">
-                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${ROLE_COLORS[nv.role] || 'bg-slate-100 text-slate-600'}`}>
-                                            {ROLE_LABELS[nv.role] || nv.role || '—'}
-                                        </span>
-                                    </td>
+
                                     <td className="px-4 py-3">
                                         {nv.da_nghi_viec ? (
                                             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-medium">
@@ -726,8 +791,7 @@ export default function NhanVienPage() {
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex items-center justify-end gap-2">
-                                            {/* Edit: admin thấy tất, user thường chỉ thấy nút sửa của mình */}
-                                            {(isAdmin || nv.email === myEmail) && (
+                                            {canEditRow(nv) && (
                                                 <button
                                                     onClick={() => { setEditData(nv); setModalOpen(true) }}
                                                     className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
@@ -771,6 +835,7 @@ export default function NhanVienPage() {
                 editData={editData}
                 onSaved={fetchData}
                 isAdmin={isAdmin}
+                myLevel={myLevel}
             />
             <DeleteModal
                 open={!!deleteTarget}

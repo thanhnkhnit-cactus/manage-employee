@@ -6,6 +6,12 @@ import SanPhamPage from './pages/SanPhamPage'
 import KhoHangPage from './pages/KhoHangPage'
 import HoaDonPage from './pages/HoaDonPage'
 import DonNhapHangPage from './pages/DonNhapHangPage'
+import PhanQuyenPage from './pages/PhanQuyenPage'
+import DoiXePage from './pages/DoiXePage'
+import VaiTroPage from './pages/VaiTroPage'
+import LenDonPage from './pages/LenDonPage'
+import ChuyenXePage from './pages/ChuyenXePage'
+import DonVanChuyenPage from './pages/DonVanChuyenPage'
 import Layout from './components/Layout'
 import { Loader2 } from 'lucide-react'
 
@@ -46,6 +52,12 @@ function AppRoutes() {
       <Route path="/kho-hang" element={<ProtectedRoute><Layout><KhoHangPage /></Layout></ProtectedRoute>} />
       <Route path="/hoa-don" element={<ProtectedRoute><Layout><HoaDonPage /></Layout></ProtectedRoute>} />
       <Route path="/nhap-hang" element={<ProtectedRoute><Layout><DonNhapHangPage /></Layout></ProtectedRoute>} />
+      <Route path="/phan-quyen" element={<ProtectedRoute><Layout><PhanQuyenPage /></Layout></ProtectedRoute>} />
+      <Route path="/doi-xe" element={<ProtectedRoute><Layout><DoiXePage /></Layout></ProtectedRoute>} />
+      <Route path="/vai-tro" element={<ProtectedRoute><Layout><VaiTroPage /></Layout></ProtectedRoute>} />
+      <Route path="/len-don" element={<ProtectedRoute><Layout><LenDonPage /></Layout></ProtectedRoute>} />
+      <Route path="/don-van-chuyen" element={<ProtectedRoute><Layout><DonVanChuyenPage /></Layout></ProtectedRoute>} />
+      <Route path="/chuyen-xe" element={<ProtectedRoute><Layout><ChuyenXePage /></Layout></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
