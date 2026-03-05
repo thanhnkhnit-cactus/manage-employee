@@ -69,11 +69,13 @@ const MENU_GROUPS = [
     {
         groupKey: 'van-tai',
         groupLabel: 'Quản lý Vận Tải',
-        color: 'blue',
+        color: 'cyan',
         menus: [
+            { key: 'len-don', label: 'Lên đơn báo giá', icon: ClipboardList },
+            { key: 'don-van-chuyen', label: 'Đơn vận chuyển', icon: FileText },
+            { key: 'chuyen-xe', label: 'Chuyến xe', icon: Truck },
             { key: 'doi-xe', label: 'Đội xe (TMS)', icon: Truck },
-            { key: 'tuyen-duong', label: 'Tuyến đường', icon: Truck },
-            { key: 'lo-hang', label: 'Lô hàng vận chuyển', icon: Boxes },
+            { key: 'tai-xe', label: 'Tài xế', icon: UserCog },
         ],
     },
 ]
@@ -88,6 +90,7 @@ const MAU_STYLE_MAP = {
     emerald: { color: 'emerald', bg: 'bg-emerald-50', border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
     orange: { color: 'orange', bg: 'bg-orange-50', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
     red: { color: 'red', bg: 'bg-red-50', border: 'border-red-200', badge: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
+    cyan: { color: 'cyan', bg: 'bg-cyan-50', border: 'border-cyan-200', badge: 'bg-cyan-100 text-cyan-700', dot: 'bg-cyan-500' },
     slate: { color: 'slate', bg: 'bg-slate-50', border: 'border-slate-200', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
 }
 
@@ -102,6 +105,7 @@ const GROUP_COLORS = {
     emerald: { header: 'bg-emerald-50 border-emerald-100', icon: 'text-emerald-500', dot: 'bg-emerald-500' },
     orange: { header: 'bg-orange-50 border-orange-100', icon: 'text-orange-500', dot: 'bg-orange-500' },
     indigo: { header: 'bg-indigo-50 border-indigo-100', icon: 'text-indigo-500', dot: 'bg-indigo-500' },
+    cyan: { header: 'bg-cyan-50 border-cyan-100', icon: 'text-cyan-500', dot: 'bg-cyan-500' },
     purple: { header: 'bg-purple-50 border-purple-100', icon: 'text-purple-500', dot: 'bg-purple-500' },
 }
 

@@ -738,13 +738,17 @@ export default function DonNhapHangPage() {
 
     const fetchData = useCallback(async () => {
         setLoading(true)
-        const [{ data: orders }, { data: prods }, { data: allChiTiet }] = await Promise.all([
+        const [{ data: orders }, { data: prods }, { data: allChiTiet }, { data: khoData }] = await Promise.all([
             supabase.from('don_nhap_hang').select('*').order(sortField, { ascending: sortDir === 'asc' }),
-            supabase.from('san_pham').select('id,ten_san_pham,gia_ban').order('ten_san_pham'),
+            supabase.from('san_pham').select('id,ten_san_pham,ma_san_pham,trang_thai').order('ten_san_pham'),
             supabase.from('don_nhap_hang_chi_tiet').select('*').order('created_at'),
+            supabase.from('kho_hang').select('san_pham_id,gia_ban'),
         ])
+        // Gắn gia_ban từ kho_hang vào từng sản phẩm
+        const khoBySp = {}
+        for (const k of (khoData || [])) khoBySp[k.san_pham_id] = k.gia_ban || 0
         setData(orders || [])
-        setProducts(prods || [])
+        setProducts((prods || []).map(p => ({ ...p, gia_ban: khoBySp[p.id] || 0 })))
         const map = {}
         for (const c of (allChiTiet || [])) {
             if (!map[c.don_nhap_hang_id]) map[c.don_nhap_hang_id] = []
