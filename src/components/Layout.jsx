@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth, ROLE_LABELS } from '../contexts/AuthContext'
-import { Building2, LogOut, Users, Package, FileText, Shield, Warehouse, Boxes, ChevronLeft, ChevronRight, Menu, X, ShieldCheck, Truck, Navigation, MapPin, ClipboardList } from 'lucide-react'
+import { Building2, LogOut, Users, Package, FileText, Shield, Warehouse, Boxes, ChevronLeft, ChevronRight, Menu, X, ShieldCheck, Truck, Navigation, MapPin, ClipboardList, User } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const ROLE_BADGE_COLORS = {
@@ -22,6 +22,7 @@ const ALL_NAV_ITEMS = [
     { to: '/vai-tro', label: 'Vai trò', icon: Shield, end: false, menuKey: 'vai-tro' },
     { to: '/phan-quyen', label: 'Phân quyền', icon: ShieldCheck, end: false, menuKey: 'phan-quyen' },
     { to: '/doi-xe', label: 'Đội xe (TMS)', icon: Truck, end: false, menuKey: 'doi-xe' },
+    { to: '/tai-xe', label: 'Tài xế', icon: User, end: false, menuKey: 'tai-xe' },
     { to: '/len-don', label: 'Lên đơn báo giá', icon: Navigation, end: false, menuKey: 'len-don' },
     { to: '/don-van-chuyen', label: 'Đơn vận chuyển', icon: ClipboardList, end: false, menuKey: 'don-van-chuyen' },
     { to: '/chuyen-xe', label: 'Chuyến xe', icon: MapPin, end: false, menuKey: 'chuyen-xe' },

@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import {
     Plus, Search, Pencil, Ban, X, Check, Lock, Unlock, Eye,
     ChevronUp, ChevronDown, FileText, AlertCircle, Loader2, Trash2,
-    TrendingUp, CheckCircle2, XCircle, ShoppingCart
+    TrendingUp, CheckCircle2, XCircle, ShoppingCart, Package
 } from 'lucide-react'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -85,28 +85,31 @@ function PasswordModal({ open, onClose, onSuccess, userPassword }) {
 
 // ─── Modal Thêm / Sửa ────────────────────────────────────────────────────────
 function HoaDonModal({ open, onClose, editData, products, employees = [], onSaved }) {
+    const emptyRow = () => ({ _id: Math.random().toString(36).slice(2), san_pham_id: '', ten_san_pham: '', so_luong: 1, don_gia: '', kho_hang_id: '', ton_kho: 0, gia_nhap: 0 })
     const emptyForm = {
         ma_hoa_don: '', ma_van_don: '', ten_khach_hang: '', so_dien_thoai: '',
-        san_pham_id: '', so_luong: '', phi_ship: '', phi_quang_cao: '',
+        phi_ship: '', phi_quang_cao: '',
         trang_thai: 'khoi_tao', ly_do_huy: '', chi_phi_hoan: '',
         nhan_vien_id: '', phi_hoa_hong: '',
     }
     const [form, setForm] = useState(emptyForm)
+    const [rows, setRows] = useState([emptyRow()])
+    const [chiTiet, setChiTiet] = useState([])
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
-    const [selectedProduct, setSelectedProduct] = useState(null)
     const [oldStatus, setOldStatus] = useState('khoi_tao')
+
+    const num = (v) => Number(v) || 0
 
     useEffect(() => {
         if (!open) return
+        setError('')
         if (editData) {
             setForm({
                 ma_hoa_don: editData.ma_hoa_don || '',
                 ma_van_don: editData.ma_van_don || '',
                 ten_khach_hang: editData.ten_khach_hang || '',
                 so_dien_thoai: editData.so_dien_thoai || '',
-                san_pham_id: editData.san_pham_id || '',
-                so_luong: editData.so_luong ?? '',
                 phi_ship: editData.phi_ship ?? '',
                 phi_quang_cao: editData.phi_quang_cao ?? '',
                 trang_thai: editData.trang_thai || 'khoi_tao',
@@ -116,34 +119,42 @@ function HoaDonModal({ open, onClose, editData, products, employees = [], onSave
                 phi_hoa_hong: editData.phi_hoa_hong ?? '',
             })
             setOldStatus(editData.trang_thai)
-            const sp = products.find(p => p.id === editData.san_pham_id)
-            setSelectedProduct(sp || null)
+            supabase.from('hoa_don_chi_tiet').select('*').eq('hoa_don_id', editData.id).then(({ data }) => {
+                if (data && data.length > 0) {
+                    setRows(data.map(r => ({ ...r, _id: r.id, ton_kho: products.find(p => p.id === r.san_pham_id)?.so_luong || 0 })))
+                    setChiTiet(data)
+                } else {
+                    const sp = products.find(p => p.id === editData.san_pham_id)
+                    setRows([{ _id: 'legacy', san_pham_id: editData.san_pham_id || '', ten_san_pham: editData.ten_san_pham || '', so_luong: editData.so_luong || 1, don_gia: editData.don_gia || '', kho_hang_id: sp?.kho_hang_id || '', ton_kho: sp?.so_luong || 0, gia_nhap: editData.gia_nhap_snapshot || 0 }])
+                    setChiTiet([])
+                }
+            })
         } else {
             setForm({ ...emptyForm, ma_hoa_don: genMaHoaDon() })
-            setSelectedProduct(null)
+            setRows([emptyRow()])
+            setChiTiet([])
             setOldStatus('khoi_tao')
         }
-        setError('')
-    }, [editData, open, products])
+    }, [editData, open])
 
     if (!open) return null
 
-    const handleProductChange = (id) => {
-        const sp = products.find(p => p.id === id)
-        setSelectedProduct(sp || null)
-        setForm(f => ({ ...f, san_pham_id: id }))
+    const setF = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
+    const handleSelectProduct = (idx, spId) => {
+        const sp = products.find(p => p.id === spId)
+        setRows(prev => prev.map((r, i) => i === idx ? { ...r, san_pham_id: spId, ten_san_pham: sp?.ten_san_pham || '', don_gia: sp?.gia_ban || '', kho_hang_id: sp?.kho_hang_id || '', ton_kho: sp?.so_luong || 0, gia_nhap: sp?.gia_nhap || 0 } : r))
     }
+    const updateRow = (idx, k, v) => setRows(prev => prev.map((r, i) => i === idx ? { ...r, [k]: v } : r))
+    const addRow = () => setRows(prev => [...prev, emptyRow()])
+    const removeRow = (idx) => setRows(prev => prev.filter((_, i) => i !== idx))
 
-    const soLuong = Number(form.so_luong) || 0
-    const donGia = selectedProduct?.gia_ban ?? (editData?.don_gia ?? 0)
-    const tongTien = soLuong * Number(donGia)
-    const phiShip = Number(form.phi_ship) || 0
-    const phiQC = Number(form.phi_quang_cao) || 0
-    const chiPhiHoan = Number(form.chi_phi_hoan) || 0
-    const gn = Number(selectedProduct?.gia_nhap ?? editData?.gia_nhap_snapshot ?? 0)
-    const vc = Number(selectedProduct?.chi_phi_van_chuyen ?? editData?.chi_phi_vc_snapshot ?? 0)
-    const phiHoaHong = Number(form.phi_hoa_hong) || 0
-    const loiNhuan = tongTien - gn * soLuong - vc * soLuong - phiShip - phiQC - chiPhiHoan - phiHoaHong
+    const phiShip = num(form.phi_ship)
+    const phiQC = num(form.phi_quang_cao)
+    const chiPhiHoan = num(form.chi_phi_hoan)
+    const phiHoaHong = num(form.phi_hoa_hong)
+    const tongSP = rows.reduce((s, r) => s + num(r.so_luong) * num(r.don_gia), 0)
+    const tongTien = tongSP + phiShip + phiQC
+    const loiNhuan = tongSP - rows.reduce((s, r) => s + num(r.so_luong) * num(r.gia_nhap), 0) - phiShip - phiQC - chiPhiHoan - phiHoaHong
 
     const showCancelFields = CANCEL_STATUSES.includes(form.trang_thai)
     const isLocked = editData?.trang_thai === 'giao_thanh_cong'
@@ -151,81 +162,108 @@ function HoaDonModal({ open, onClose, editData, products, employees = [], onSave
     const handleSave = async () => {
         if (!form.ma_hoa_don.trim()) return setError('Vui lòng nhập mã hóa đơn.')
         if (!form.ten_khach_hang.trim()) return setError('Vui lòng nhập tên khách hàng.')
-        if (!form.san_pham_id) return setError('Vui lòng chọn sản phẩm.')
-        if (soLuong <= 0) return setError('Số lượng phải lớn hơn 0.')
-        if (phiShip < 0 || phiQC < 0) return setError('Phí không được âm.')
-
-        // Kiểm tra tồn kho_hang khi tạo mới
-        if (!editData && selectedProduct) {
-            if (selectedProduct.so_luong < soLuong) {
-                return setError(`Kho chỉ còn ${selectedProduct.so_luong} sản phẩm, không đủ số lượng yêu cầu.`)
+        if (rows.some(r => !r.san_pham_id)) return setError('Vui lòng chọn sản phẩm cho tất cả dòng.')
+        if (rows.some(r => num(r.so_luong) <= 0)) return setError('Số lượng phải lớn hơn 0.')
+        if (!editData) {
+            for (const r of rows) {
+                if (num(r.so_luong) > r.ton_kho) return setError(`"${r.ten_san_pham}" chỉ còn ${r.ton_kho} trong kho.`)
+            }
+        } else {
+            // Khi edit: chỉ cần kiểm tra phần tăng thêm (delta dương) có đủ kho không
+            const oldMap = {}
+                ; (chiTiet || []).forEach(ct => {
+                    oldMap[ct.san_pham_id] = (oldMap[ct.san_pham_id] || 0) + num(ct.so_luong)
+                })
+            for (const r of rows) {
+                if (!r.san_pham_id) continue
+                const oldQty = oldMap[r.san_pham_id] || 0
+                const newQty = rows.filter(x => x.san_pham_id === r.san_pham_id).reduce((s, x) => s + num(x.so_luong), 0)
+                const delta = newQty - oldQty
+                if (delta > 0 && delta > r.ton_kho) {
+                    return setError(`"${r.ten_san_pham}" chỉ còn ${r.ton_kho} trong kho, không đủ thêm ${delta}.`)
+                }
             }
         }
-
-        setSaving(true)
-        setError('')
-
+        setSaving(true); setError('')
         try {
+            const firstRow = rows[0]
             if (editData?.id) {
-                // ─ Cập nhật đơn hàng ─────────────────────────────────────
-                const payload = {
+                // Kiểm tra tồn kho cho dòng mới / tăng SL
+                // Tính delta: so_luong_mới - so_luong_cũ theo từng san_pham_id
+                const oldMap = {}
+                    ; (chiTiet || []).forEach(ct => {
+                        oldMap[ct.san_pham_id] = (oldMap[ct.san_pham_id] || 0) + num(ct.so_luong)
+                    })
+                const newMap = {}
+                rows.forEach(r => {
+                    if (r.san_pham_id) newMap[r.san_pham_id] = (newMap[r.san_pham_id] || 0) + num(r.so_luong)
+                })
+
+                // Tất cả san_pham_id liên quan
+                const allSanPhamIds = [...new Set([...Object.keys(oldMap), ...Object.keys(newMap)])]
+
+                await supabase.from('hoa_don').update({
                     ma_van_don: form.ma_van_don.trim(),
                     ten_khach_hang: form.ten_khach_hang.trim(),
                     so_dien_thoai: form.so_dien_thoai.trim(),
-                    phi_ship: phiShip,
-                    phi_quang_cao: phiQC,
+                    phi_ship: phiShip, phi_quang_cao: phiQC,
                     trang_thai: form.trang_thai,
-                    ly_do_huy: showCancelFields ? form.ly_do_huy.trim() : null,
+                    ly_do_huy: showCancelFields ? form.ly_do_huy : null,
                     chi_phi_hoan: showCancelFields ? chiPhiHoan : 0,
                     nhan_vien_id: form.nhan_vien_id || null,
-                    ten_nhan_vien: form.nhan_vien_id ? (employees.find(e => e.id === form.nhan_vien_id)?.ho_ten || null) : null,
-                    ma_nhan_vien: form.nhan_vien_id ? (employees.find(e => e.id === form.nhan_vien_id)?.ma_nhan_vien || null) : null,
+                    ten_nhan_vien: employees.find(e => e.id === form.nhan_vien_id)?.ho_ten || null,
+                    ma_nhan_vien: employees.find(e => e.id === form.nhan_vien_id)?.ma_nhan_vien || null,
                     phi_hoa_hong: phiHoaHong,
-                }
-                const { error: updErr } = await supabase.from('hoa_don').update(payload).eq('id', editData.id)
-                if (updErr) throw updErr
+                }).eq('id', editData.id)
+                await supabase.from('hoa_don_chi_tiet').delete().eq('hoa_don_id', editData.id)
+                await supabase.from('hoa_don_chi_tiet').insert(rows.map(r => ({ hoa_don_id: editData.id, san_pham_id: r.san_pham_id, kho_hang_id: r.kho_hang_id || null, ten_san_pham: r.ten_san_pham, so_luong: num(r.so_luong), don_gia: num(r.don_gia), thanh_tien: num(r.so_luong) * num(r.don_gia), gia_nhap_snapshot: num(r.gia_nhap) })))
 
-                // Hoàn kho: nếu status chuyển sang hủy/hoàn từ trạng thái active
                 const wasActive = ACTIVE_STATUSES.includes(oldStatus)
                 const nowCancelled = ['huy_don_hang', 'hoan_hang'].includes(form.trang_thai)
-                if (wasActive && nowCancelled && editData.san_pham_id) {
-                    const { data: kh } = await supabase.from('kho_hang').select('id, so_luong').eq('san_pham_id', editData.san_pham_id).single()
-                    if (kh) await supabase.from('kho_hang').update({ so_luong: kh.so_luong + editData.so_luong, updated_at: new Date().toISOString() }).eq('id', kh.id)
-                }
-            } else {
-                // ─ Tạo đơn hàng mới ──────────────────────────────────────
-                const payload = {
-                    ma_hoa_don: form.ma_hoa_don.trim(),
-                    ma_van_don: form.ma_van_don.trim(),
-                    ten_khach_hang: form.ten_khach_hang.trim(),
-                    so_dien_thoai: form.so_dien_thoai.trim(),
-                    san_pham_id: form.san_pham_id,
-                    ten_san_pham: selectedProduct.ten_san_pham,
-                    so_luong: soLuong,
-                    don_gia: Number(selectedProduct.gia_ban),
-                    phi_ship: phiShip,
-                    phi_quang_cao: phiQC,
-                    trang_thai: 'khoi_tao',
-                    chi_phi_hoan: 0,
-                    gia_nhap_snapshot: Number(selectedProduct.gia_nhap),
-                    chi_phi_vc_snapshot: Number(selectedProduct.chi_phi_van_chuyen),
-                    nhan_vien_id: form.nhan_vien_id || null,
-                    ten_nhan_vien: form.nhan_vien_id ? (employees.find(e => e.id === form.nhan_vien_id)?.ho_ten || null) : null,
-                    ma_nhan_vien: form.nhan_vien_id ? (employees.find(e => e.id === form.nhan_vien_id)?.ma_nhan_vien || null) : null,
-                    phi_hoa_hong: phiHoaHong,
-                }
-                const { error: insErr } = await supabase.from('hoa_don').insert([payload])
-                if (insErr) throw insErr
-                // Tự động trừ tồn kho_hang khi tạo đơn
-                const { data: kh } = await supabase.from('kho_hang').select('id, so_luong').eq('san_pham_id', form.san_pham_id).single()
-                if (kh) await supabase.from('kho_hang').update({ so_luong: Math.max(0, kh.so_luong - soLuong), updated_at: new Date().toISOString() }).eq('id', kh.id)
-            }
 
-            onSaved()
-            onClose()
-        } catch (e) {
-            setError('Có lỗi xảy ra: ' + (e?.message || e))
-        }
+                if (wasActive && nowCancelled) {
+                    // Hoàn / Hủy → cộng lại toàn bộ kho theo chi_tiet cũ
+                    const restoreList = chiTiet.length ? chiTiet : [{ san_pham_id: editData.san_pham_id, so_luong: editData.so_luong }]
+                    for (const r of restoreList) {
+                        if (!r.san_pham_id) continue
+                        const { data: kh } = await supabase.from('kho_hang').select('id,so_luong').eq('san_pham_id', r.san_pham_id).single()
+                        if (kh) await supabase.from('kho_hang').update({ so_luong: kh.so_luong + num(r.so_luong) }).eq('id', kh.id)
+                    }
+                } else if (wasActive) {
+                    // Đơn vẫn active → trừ/cộng kho theo delta
+                    for (const spId of allSanPhamIds) {
+                        const oldQty = oldMap[spId] || 0
+                        const newQty = newMap[spId] || 0
+                        const delta = newQty - oldQty  // dương → trừ kho; âm → cộng kho
+                        if (delta === 0) continue
+                        const { data: kh } = await supabase.from('kho_hang').select('id,so_luong').eq('san_pham_id', spId).single()
+                        if (kh) await supabase.from('kho_hang').update({ so_luong: Math.max(0, kh.so_luong - delta) }).eq('id', kh.id)
+                    }
+                }
+
+            } else {
+                const { data: newHD, error: insErr } = await supabase.from('hoa_don').insert([{
+                    ma_hoa_don: form.ma_hoa_don.trim(), ma_van_don: form.ma_van_don.trim(),
+                    ten_khach_hang: form.ten_khach_hang.trim(), so_dien_thoai: form.so_dien_thoai.trim(),
+                    san_pham_id: firstRow.san_pham_id, ten_san_pham: firstRow.ten_san_pham,
+                    so_luong: num(firstRow.so_luong), don_gia: num(firstRow.don_gia),
+                    tong_tien: tongTien, phi_ship: phiShip, phi_quang_cao: phiQC,
+                    trang_thai: 'khoi_tao', chi_phi_hoan: 0,
+                    gia_nhap_snapshot: num(firstRow.gia_nhap), chi_phi_vc_snapshot: 0,
+                    nhan_vien_id: form.nhan_vien_id || null,
+                    ten_nhan_vien: employees.find(e => e.id === form.nhan_vien_id)?.ho_ten || null,
+                    ma_nhan_vien: employees.find(e => e.id === form.nhan_vien_id)?.ma_nhan_vien || null,
+                    phi_hoa_hong: phiHoaHong,
+                }]).select('id').single()
+                if (insErr) throw insErr
+                await supabase.from('hoa_don_chi_tiet').insert(rows.map(r => ({ hoa_don_id: newHD.id, san_pham_id: r.san_pham_id, kho_hang_id: r.kho_hang_id || null, ten_san_pham: r.ten_san_pham, so_luong: num(r.so_luong), don_gia: num(r.don_gia), thanh_tien: num(r.so_luong) * num(r.don_gia), gia_nhap_snapshot: num(r.gia_nhap) })))
+                for (const r of rows) {
+                    const { data: kh } = await supabase.from('kho_hang').select('id,so_luong').eq('san_pham_id', r.san_pham_id).single()
+                    if (kh) await supabase.from('kho_hang').update({ so_luong: Math.max(0, kh.so_luong - num(r.so_luong)) }).eq('id', kh.id)
+                }
+            }
+            onSaved(); onClose()
+        } catch (e) { setError('Có lỗi: ' + (e?.message || e)) }
         setSaving(false)
     }
 
@@ -302,51 +340,84 @@ function HoaDonModal({ open, onClose, editData, products, employees = [], onSave
                         </div>
                     </div>
 
-                    {/* Sản phẩm */}
-                    <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Thông tin sản phẩm</p>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1.5">Chọn sản phẩm <span className="text-red-500">*</span></label>
-                                {isEdit ? (
-                                    <input value={editData?.ten_san_pham} readOnly
-                                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-100 text-slate-500" />
-                                ) : (
-                                    <select value={form.san_pham_id} onChange={e => handleProductChange(e.target.value)}
-                                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white transition-all">
-                                        <option value="">-- Chọn sản phẩm --</option>
-                                        {products.map(p => (
-                                            <option key={p.id} value={p.id} disabled={p.so_luong === 0}>
-                                                {p.ten_san_pham} (còn {p.so_luong})
-                                            </option>
+
+                    {/* ── Grid sản phẩm ── */}
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                        <div className="bg-blue-50 px-4 py-2.5 flex items-center justify-between border-b border-blue-100">
+                            <p className="text-xs font-bold text-blue-700 uppercase tracking-wide flex items-center gap-1.5">
+                                <Package className="w-3.5 h-3.5" /> Thông tin sản phẩm *
+                            </p>
+                            {!isLocked && (
+                                <button onClick={addRow} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium">
+                                    <Plus className="w-3.5 h-3.5" /> Thêm dòng
+                                </button>
+                            )}
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                        {['Sản phẩm', 'Số lượng', 'Đơn giá (₫)', 'Thành tiền', ''].map(h => (
+                                            <th key={h} className="px-3 py-2 text-left font-semibold text-slate-500 whitespace-nowrap">{h}</th>
                                         ))}
-                                    </select>
-                                )}
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1.5">Số lượng <span className="text-red-500">*</span></label>
-                                <input type="number" min={1} value={form.so_luong}
-                                    readOnly={isEdit}
-                                    onChange={e => setForm(f => ({ ...f, so_luong: e.target.value }))}
-                                    className={`w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${isEdit ? 'bg-slate-100 text-slate-500' : ''}`}
-                                    placeholder="1" />
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map((row, idx) => {
+                                        const thanhTien = num(row.so_luong) * num(row.don_gia)
+                                        return (
+                                            <tr key={row._id} className="border-b border-slate-100 hover:bg-blue-50/30">
+                                                <td className="px-2 py-2 min-w-[180px]">
+                                                    {isLocked ? (
+                                                        <span className="font-medium text-slate-700">{row.ten_san_pham}</span>
+                                                    ) : (
+                                                        <select value={row.san_pham_id} onChange={e => handleSelectProduct(idx, e.target.value)}
+                                                            className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                                            <option value="">-- Chọn --</option>
+                                                            {products.map(p => (
+                                                                <option key={p.id} value={p.id} disabled={p.so_luong === 0}>
+                                                                    {p.ten_san_pham} (còn {p.so_luong})
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    )}
+                                                </td>
+                                                <td className="px-2 py-2 w-[80px]">
+                                                    <input type="number" min={1} value={row.so_luong} readOnly={isLocked}
+                                                        onChange={e => updateRow(idx, 'so_luong', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                                </td>
+                                                <td className="px-2 py-2 w-[130px]">
+                                                    <input type="number" min={0} value={row.don_gia} readOnly={isLocked}
+                                                        onChange={e => updateRow(idx, 'don_gia', e.target.value)}
+                                                        placeholder="0"
+                                                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                                </td>
+                                                <td className="px-3 py-2 w-[120px] text-right font-semibold text-slate-800">
+                                                    {thanhTien > 0 ? thanhTien.toLocaleString('vi-VN') + '₫' : '—'}
+                                                </td>
+                                                <td className="px-2 py-2 w-[36px]">
+                                                    {!isLocked && rows.length > 1 && (
+                                                        <button onClick={() => removeRow(idx)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex items-center justify-between">
+                            <span className="text-xs text-slate-500">{rows.length} dòng</span>
+                            <div className="flex gap-4 text-xs font-semibold">
+                                <span className="text-slate-600">Tổng SP: <span className="text-slate-800">{tongSP.toLocaleString('vi-VN')}₫</span></span>
+                                <span className="text-blue-700">Tổng HĐ: {tongTien.toLocaleString('vi-VN')}₫</span>
                             </div>
                         </div>
-
-                        {/* Preview đơn giá & tổng tiền */}
-                        {(selectedProduct || isEdit) && soLuong > 0 && (
-                            <div className="grid grid-cols-2 gap-3 pt-1">
-                                <div className="bg-white rounded-lg p-3 border border-slate-200">
-                                    <p className="text-xs text-slate-500 mb-1">Đơn giá (giá bán)</p>
-                                    <p className="text-sm font-semibold text-slate-800">{formatVND(donGia)}</p>
-                                </div>
-                                <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                                    <p className="text-xs text-blue-600 mb-1">Tổng tiền</p>
-                                    <p className="text-sm font-bold text-blue-700">{formatVND(tongTien)}</p>
-                                </div>
-                            </div>
-                        )}
                     </div>
+
 
                     {/* Phí ship + Phí QC */}
                     <div className="grid grid-cols-2 gap-4">
@@ -524,25 +595,32 @@ export default function HoaDonPage() {
 
     const fetchData = async () => {
         setLoading(true)
-        const [{ data: orders }, { data: prods }, { data: nvs }] = await Promise.all([
+        const [{ data: orders }, { data: prods }, { data: nvs }, { data: chiTiets }] = await Promise.all([
             supabase.from('hoa_don').select('*').order(sortField, { ascending: sortDir === 'asc' }),
-            // Lấy sản phẩm cùng số lượng tồn kho từ kho_hang
             supabase.from('kho_hang')
-                .select('id, so_luong, gia_ban, san_pham:san_pham_id(id, ten_san_pham, gia_nhap, chi_phi_van_chuyen, trang_thai)')
+                .select('id, so_luong, gia_ban, gia_nhap, san_pham:san_pham_id(id, ten_san_pham, trang_thai)')
                 .eq('trang_thai', 'A')
                 .gt('so_luong', 0)
                 .order('created_at', { ascending: true }),
             supabase.from('nhan_vien').select('id,ma_nhan_vien,ho_ten,da_nghi_viec').order('ma_nhan_vien', { ascending: true }),
+            supabase.from('hoa_don_chi_tiet').select('*'),
         ])
-        setData(orders || [])
-        // map kho_hang + san_pham info into a flat product list
-        setProducts((prods || []).map(kh => ({
+        // Group chi_tiet by hoa_don_id
+        const ctMap = {}
+            ; (chiTiets || []).forEach(ct => {
+                if (!ctMap[ct.hoa_don_id]) ctMap[ct.hoa_don_id] = []
+                ctMap[ct.hoa_don_id].push(ct)
+            })
+        // Merge chi_tiet vào từng đơn
+        const merged = (orders || []).map(hd => ({ ...hd, _chiTiet: ctMap[hd.id] || [] }))
+        setData(merged)
+        setProducts((prods || []).filter(kh => kh.san_pham).map(kh => ({
             id: kh.san_pham?.id,
             kho_hang_id: kh.id,
             ten_san_pham: kh.san_pham?.ten_san_pham || '',
             gia_ban: kh.gia_ban,
-            gia_nhap: kh.san_pham?.gia_nhap || 0,
-            chi_phi_van_chuyen: kh.san_pham?.chi_phi_van_chuyen || 0,
+            gia_nhap: kh.gia_nhap || 0,
+            chi_phi_van_chuyen: 0,
             so_luong: kh.so_luong,
         })))
         setEmployees(nvs || [])
@@ -603,11 +681,17 @@ export default function HoaDonPage() {
         return sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-blue-500" /> : <ChevronDown className="w-3 h-3 text-blue-500" />
     }
 
-    const calcProfit = (hd) => Number(hd.tong_tien)
-        - Number(hd.gia_nhap_snapshot) * Number(hd.so_luong)
-        - Number(hd.chi_phi_vc_snapshot) * Number(hd.so_luong)
-        - Number(hd.phi_ship) - Number(hd.phi_quang_cao) - Number(hd.chi_phi_hoan)
-        - Number(hd.phi_hoa_hong)
+    const calcProfit = (hd) => {
+        const ct = hd._chiTiet || []
+        const tongSP = ct.length > 0
+            ? ct.reduce((s, r) => s + Number(r.so_luong) * Number(r.don_gia), 0)
+            : Number(hd.tong_tien)
+        const tongGiaNhap = ct.length > 0
+            ? ct.reduce((s, r) => s + Number(r.so_luong) * Number(r.gia_nhap_snapshot || 0), 0)
+            : Number(hd.gia_nhap_snapshot) * Number(hd.so_luong)
+        return tongSP - tongGiaNhap - Number(hd.phi_ship) - Number(hd.phi_quang_cao)
+            - Number(hd.chi_phi_hoan) - Number(hd.phi_hoa_hong)
+    }
 
     const stats = {
         total: data.length,
@@ -744,9 +828,26 @@ export default function HoaDonPage() {
                                                 <p className="font-medium text-slate-800">{hd.ten_khach_hang}</p>
                                                 {hd.so_dien_thoai && <p className="text-xs text-slate-500">{hd.so_dien_thoai}</p>}
                                             </td>
-                                            <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{hd.ten_san_pham}</td>
+                                            <td className="px-4 py-3 max-w-[200px]">
+                                                {hd._chiTiet?.length > 0 ? (
+                                                    <div className="space-y-0.5">
+                                                        {hd._chiTiet.map((ct, i) => (
+                                                            <p key={i} className="text-xs text-slate-700 truncate" title={ct.ten_san_pham}>
+                                                                <span className="font-medium">{ct.ten_san_pham}</span>
+                                                                <span className="text-slate-400 ml-1">×{ct.so_luong}</span>
+                                                            </p>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-700 text-xs">{hd.ten_san_pham || '—'}</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-3 text-center whitespace-nowrap">
-                                                <span className="text-slate-800 font-medium">{hd.so_luong}</span>
+                                                <span className="text-slate-800 font-medium text-xs bg-slate-100 px-2 py-0.5 rounded-full">
+                                                    {hd._chiTiet?.length > 0
+                                                        ? hd._chiTiet.reduce((s, r) => s + Number(r.so_luong), 0)
+                                                        : (hd.so_luong ?? '—')}
+                                                </span>
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap font-semibold text-slate-800">{formatVND(hd.tong_tien)}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-slate-600">{formatVND(hd.phi_ship)}</td>
@@ -857,15 +958,12 @@ export default function HoaDonPage() {
                                     </span>
                                 )}
                             </div>
-                            {/* Grid info */}
+                            {/* Grid info cơ bản */}
                             <div className="grid grid-cols-2 gap-3">
                                 {[
                                     { label: 'Mã vận đơn', value: viewDetail.ma_van_don },
                                     { label: 'Khách hàng', value: viewDetail.ten_khach_hang },
                                     { label: 'Số điện thoại', value: viewDetail.so_dien_thoai },
-                                    { label: 'Sản phẩm', value: viewDetail.ten_san_pham },
-                                    { label: 'Số lượng', value: viewDetail.so_luong },
-                                    { label: 'Giá bán/sp', value: formatVND(viewDetail.don_gia) },
                                     { label: 'Tổng tiền', value: formatVND(viewDetail.tong_tien), highlight: true },
                                     { label: 'Phí ship', value: formatVND(viewDetail.phi_ship) },
                                     { label: 'Phí quảng cáo', value: formatVND(viewDetail.phi_quang_cao) },
@@ -873,7 +971,7 @@ export default function HoaDonPage() {
                                     { label: 'Hoa hồng', value: formatVND(viewDetail.phi_hoa_hong) },
                                     ...(viewDetail.ly_do_huy ? [{ label: 'Lý do hủy', value: viewDetail.ly_do_huy }] : []),
                                     ...(viewDetail.chi_phi_hoan ? [{ label: 'Chi phí hoàn', value: formatVND(viewDetail.chi_phi_hoan) }] : []),
-                                    ...(canSeeProfit && profitUnlocked ? [{ label: 'Lợi nhuận', value: formatVND(calcProfit(viewDetail)), highlight: true }] : []),
+                                    ...(profitUnlocked ? [{ label: 'Lợi nhuận ước tính', value: formatVND(calcProfit(viewDetail)), highlight: true }] : []),
                                 ].map(({ label, value, highlight }) => (
                                     <div key={label} className="bg-slate-50 rounded-xl px-4 py-3">
                                         <p className="text-xs text-slate-500 mb-0.5">{label}</p>
@@ -881,6 +979,41 @@ export default function HoaDonPage() {
                                     </div>
                                 ))}
                             </div>
+
+                            {/* Bảng chi tiết sản phẩm */}
+                            {viewDetail._chiTiet?.length > 0 && (
+                                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                    <div className="bg-blue-50 px-4 py-2 border-b border-blue-100">
+                                        <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">Chi tiết sản phẩm ({viewDetail._chiTiet.length} dòng)</p>
+                                    </div>
+                                    <table className="w-full text-xs">
+                                        <thead>
+                                            <tr className="bg-slate-50 border-b border-slate-100">
+                                                {['Sản phẩm', 'SL', 'Đơn giá', 'Thành tiền'].map(h => (
+                                                    <th key={h} className="px-3 py-2 text-left font-semibold text-slate-500">{h}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {viewDetail._chiTiet.map((ct, i) => (
+                                                <tr key={i} className="border-b border-slate-50 last:border-0">
+                                                    <td className="px-3 py-2 font-medium text-slate-700">{ct.ten_san_pham}</td>
+                                                    <td className="px-3 py-2 text-center text-slate-600">{ct.so_luong}</td>
+                                                    <td className="px-3 py-2 text-right text-slate-600">{Number(ct.don_gia).toLocaleString('vi-VN')}₫</td>
+                                                    <td className="px-3 py-2 text-right font-semibold text-slate-800">{Number(ct.thanh_tien || ct.so_luong * ct.don_gia).toLocaleString('vi-VN')}₫</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr className="bg-blue-50 font-semibold">
+                                                <td colSpan={2} className="px-3 py-2 text-blue-700 text-xs">Tổng SP: {viewDetail._chiTiet.reduce((s, r) => s + Number(r.so_luong), 0)} sản phẩm</td>
+                                                <td colSpan={2} className="px-3 py-2 text-right text-blue-700">{viewDetail._chiTiet.reduce((s, r) => s + Number(r.thanh_tien || r.so_luong * r.don_gia), 0).toLocaleString('vi-VN')}₫</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            )}
+
                             <p className="text-xs text-slate-400 text-right">
                                 Tạo lúc {new Date(viewDetail.created_at).toLocaleString('vi-VN')}
                             </p>

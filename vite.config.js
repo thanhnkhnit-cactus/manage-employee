@@ -7,4 +7,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  // SPA fallback: tất cả route 404 → index.html
+  appType: 'spa',
+  preview: {
+    port: 4173,
+    strictPort: true,
+  },
 })

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage'
 import NhanVienPage from './pages/NhanVienPage'
@@ -8,6 +8,7 @@ import HoaDonPage from './pages/HoaDonPage'
 import DonNhapHangPage from './pages/DonNhapHangPage'
 import PhanQuyenPage from './pages/PhanQuyenPage'
 import DoiXePage from './pages/DoiXePage'
+import TaiXePage from './pages/TaiXePage'
 import VaiTroPage from './pages/VaiTroPage'
 import LenDonPage from './pages/LenDonPage'
 import ChuyenXePage from './pages/ChuyenXePage'
@@ -54,6 +55,7 @@ function AppRoutes() {
       <Route path="/nhap-hang" element={<ProtectedRoute><Layout><DonNhapHangPage /></Layout></ProtectedRoute>} />
       <Route path="/phan-quyen" element={<ProtectedRoute><Layout><PhanQuyenPage /></Layout></ProtectedRoute>} />
       <Route path="/doi-xe" element={<ProtectedRoute><Layout><DoiXePage /></Layout></ProtectedRoute>} />
+      <Route path="/tai-xe" element={<ProtectedRoute><Layout><TaiXePage /></Layout></ProtectedRoute>} />
       <Route path="/vai-tro" element={<ProtectedRoute><Layout><VaiTroPage /></Layout></ProtectedRoute>} />
       <Route path="/len-don" element={<ProtectedRoute><Layout><LenDonPage /></Layout></ProtectedRoute>} />
       <Route path="/don-van-chuyen" element={<ProtectedRoute><Layout><DonVanChuyenPage /></Layout></ProtectedRoute>} />
@@ -65,10 +67,10 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
